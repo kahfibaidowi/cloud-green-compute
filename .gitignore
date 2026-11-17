@@ -1,0 +1,22 @@
+# Cache & hasil kompilasi Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment lokal (jika ada)
+venv/
+.venv/
+env/
+
+# Environment variables & rahasia lokal
+.env
+.env.*
+
+# File sistem operasi & editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Output log atau hasil tes sementara (opsional)
+*.log

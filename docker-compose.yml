@@ -1,0 +1,52 @@
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.baseline
+    container_name: green-app
+    ports:
+      - "5000:5000"
+    networks:
+      - green-net
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: green-cadvisor
+    privileged: true
+    ports:
+      - "8080:8080"
+    command:
+      - "--docker_only=true"
+      - "--housekeeping_interval=5s"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - green-net
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: green-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - cadvisor
+    networks:
+      - green-net
+
+  benchmark:
+    image: python:3.11-alpine
+    profiles: ["test"]
+    volumes:
+      - ./benchmark:/benchmark
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - app
+      - prometheus
+    networks:
+      - green-net
+
+networks:
+  green-net:
+    driver: bridge
