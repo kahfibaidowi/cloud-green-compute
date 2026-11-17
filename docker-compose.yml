@@ -9,6 +9,31 @@ services:
     networks:
       - green-net
 
+  orchestrator:
+    build:
+      context: ./orchestrator
+    container_name: green-orchestrator
+    ports:
+      - "8000:8000"
+    environment:
+      - DOCKER_NETWORK=cloud-green-computing_green-net
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./app:/workspace/app:ro
+    networks:
+      - green-net
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: green-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - orchestrator
+    networks:
+      - green-net
+
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: green-cadvisor
@@ -35,18 +60,7 @@ services:
     networks:
       - green-net
 
-  benchmark:
-    image: python:3.11-alpine
-    profiles: ["test"]
-    volumes:
-      - ./benchmark:/benchmark
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      - app
-      - prometheus
-    networks:
-      - green-net
-
 networks:
   green-net:
+    name: cloud-green-computing_green-net
     driver: bridge

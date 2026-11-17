@@ -1,22 +1,25 @@
-# Cache & hasil kompilasi Python
+# Python cache & kompilasi
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual environment lokal (jika ada)
 venv/
 .venv/
 env/
+
+# Node.js / React Frontend
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
 
 # Environment variables & rahasia lokal
 .env
 .env.*
 
-# File sistem operasi & editor
+# Sistem operasi & IDE
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 
-# Output log atau hasil tes sementara (opsional)
+# Log sementara
 *.log

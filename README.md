@@ -1,118 +1,84 @@
-# Green Cloud Computing — Resource Optimization & Benchmarking
+# Green Cloud Computing — Resource Optimization & Benchmark Studio
 
-Proyek eksperimen **Topik 7 — Green Cloud Computing** untuk mengukur, mengoptimasi, dan menganalisis efisiensi penggunaan sumber daya komputasi (CPU, RAM, dan *Storage*) pada layanan berbasis container Docker.
+Proyek eksperimen **Topik 7 — Green Cloud Computing** untuk mengukur, mengoptimasi, dan menganalisis efisiensi penggunaan sumber daya komputasi (**CPU**, **RAM**, dan **Storage**) pada layanan berbasis container Docker, lengkap dengan antarmuka web interaktif (**React JS**) untuk pengujian *custom parameter* antara skenario **Unoptimized (Baseline)** dan **Optimized (Green Tuning)**.
 
-## Arsitektur & Alur Sistem
+---
 
-```
-[ Workload Generator ] ---> [ Target App (green-app) ] <--- [ Docker Engine Socket / cAdvisor ] ---> [ Prometheus ]
- (benchmark/load_test.py)        (Flask + Gunicorn)                 (Metrics Collector)                 (Monitoring)
+## Arsitektur Sistem & Isolasi Container
 
-```
+Alur interaksi antar layanan dalam jaringan internal Docker (`cloud-green-computing_green-net`):
 
-1. **Workload Baseline:** Menjalankan aplikasi web Python Flask (`app/app.py`) dengan beban komputasi *CPU-bound* (pencarian bilangan prima) menggunakan *base image* penuh tanpa batasan sumber daya.
+* **`green-frontend` (Port `3000`):** Antarmuka web berbasis React + Vite + Tailwind CSS untuk mengatur parameter pengujian secara kustom, memantau progres *real-time*, dan melihat tabel serta kartu perbandingan efisiensi.
+* **`green-orchestrator` (Port `8000`):** Backend API Python Flask yang terhubung ke Docker Engine (`/var/run/docker.sock`) untuk membangun ulang container `green-app` secara dinamis (*Unoptimized* lalu *Optimized*), menembakkan *workload* paralel, dan merekam metrik konsumsi sumber daya.
+* **`green-app` (Port `5000`):** Layanan target uji (Python Flask + Gunicorn) dengan *endpoint* komputasi bilangan prima (`/work?limit=...`) yang diisolasi sepenuhnya agar pengukuran CPU, RAM, dan ukuran *image* tidak tercampur dengan layanan monitoring maupun UI.
+* **`green-cadvisor` (`:8080`) & `green-prometheus` (`:9090`):** Stack pemantauan metrik kontainer dan visualisasi grafik *time-series*.
 
-2. **Measure Baseline:** Menembakkan 100 *request* serentak (`10 concurrent`) dan merekam penggunaan *Image Size*, *RAM Idle*, *RAM Peak*, *CPU Usage*, dan *Average Latency*.
-
-3. **Optimize Container:** Mengganti *base image* ke `python:3.11-alpine`, menyesuaikan konfigurasi *worker/thread* Gunicorn, serta menerapkan batas sumber daya (`cpus: "0.50"`, `memory: 128M`).
-
-4. **Measure Again & Compare:** Menjalankan beban kerja yang identik pada lingkungan *Optimized* untuk menghitung efisiensi sumber daya dan menganalisis *trade-off* performa.
+---
 
 ## Struktur Proyek
 
-```
-.
-├── app/
-│   ├── app.py                      # Aplikasi web uji (Flask) dengan endpoint /work
-│   ├── requirements.txt            # Dependensi Python (Flask & Gunicorn)
-│   ├── Dockerfile.baseline         # Konfigurasi image sebelum optimasi (Debian full, 4 workers)
-│   └── Dockerfile.optimized        # Konfigurasi image sesudah optimasi (Alpine, 2 workers/2 threads)
-├── monitoring/
-│   └── prometheus.yml              # Konfigurasi scrape interval Prometheus
-├── benchmark/
-│   └── load_test.py                # Skrip load testing & pengambil metrik Docker Engine API
-├── docker-compose.yml              # Orkestrasi layanan skenario Baseline
-├── docker-compose.optimized.yml    # Orkestrasi layanan skenario Optimized + Resource Limits
-├── run_test.sh                     # Skrip otomatisasi pengujian Baseline vs Optimized
-└── README.md
+* `app/app.py` — Aplikasi web uji (Flask) dengan parameter dinamis `?limit=`
+* `app/requirements.txt` — Dependensi Python (Flask & Gunicorn)
+* `app/Dockerfile.baseline` — Konfigurasi image Unoptimized (`python:3.11` Debian penuh)
+* `app/Dockerfile.optimized` — Konfigurasi image Optimized (`python:3.11-alpine` ringan)
+* `orchestrator/server.py` — Backend pengendali Docker & runner benchmark otomatis
+* `orchestrator/requirements.txt` — Dependensi Orchestrator (Flask, Flask-CORS, Docker SDK)
+* `orchestrator/Dockerfile` — Image Orchestrator
+* `frontend/src/App.jsx` — Dashboard interaktif React JS
+* `frontend/src/main.jsx` & `frontend/src/index.css` — Entry point dan styling Tailwind CSS
+* `frontend/Dockerfile` — Image Frontend Node 20 Alpine
+* `monitoring/prometheus.yml` — Konfigurasi scrape interval Prometheus (`5s`)
+* `benchmark/load_test.py` — Skrip benchmark CLI standalone
+* `docker-compose.yml` — Orkestrasi seluruh layanan (UI, Orchestrator, App, Monitoring)
+* `docker-compose.optimized.yml` — Konfigurasi CLI mode Optimized
+* `run_test.sh` — Skrip otomatisasi pengujian via terminal (CLI)
+* `.gitignore` & `README.md` — Konfigurasi Git dan dokumentasi proyek
 
-```
+---
 
 ## Prasyarat
 
-* **Docker** & **Docker Compose V2** (mendukung Windows Docker Desktop + Git Bash maupun Linux Ubuntu 24.04 LTS).
+* **Docker** & **Docker Compose V2** (kompatibel di **Windows Docker Desktop + Git Bash** maupun **Linux Ubuntu 24.04 LTS**).
+* **Git**.
 
-* **Git** dan **Bash**.
+---
 
-## Cara Menjalankan Pengujian Otomatis
-
-Seluruh skenario pengujian (*Baseline* dan *Optimized*) telah diotomatisasi dalam satu skrip:
+## Cara Menjalankan Aplikasi
 
 1. **Clone repositori dan masuk ke direktori proyek:**
+   Jalankan perintah `git clone <URL_REPO_GITHUB_ANDA>` lalu masuk ke foldernya menggunakan `cd <NAMA_FOLDER_REPO>`.
 
-   ```
-   git clone <URL_REPO_GITHUB_ANDA>
-   cd <NAMA_FOLDER_REPO>
-   
-   ```
+2. **Nyalakan seluruh layanan dengan Docker Compose:**
+   * **Di Windows (Git Bash):** jalankan `MSYS_NO_PATHCONV=1 docker compose up -d --build`
+   * **Di Linux Ubuntu 24.04:** jalankan `sudo docker compose up -d --build`
 
-2. **Jalankan skrip pengujian otomatis:**
+3. **Akses Dashboard & Layanan:**
+   * **Benchmark Studio UI (React):** `http://localhost:3000` (atau `http://<IP_VPS>:3000`)
+   * **Orchestrator API:** `http://localhost:8000/api/status`
+   * **Prometheus UI:** `http://localhost:9090`
+   * **cAdvisor UI:** `http://localhost:8080`
 
-   * **Di Windows (Git Bash):**
+> **Catatan VPS:** Jika dijalankan di VPS Linux Ubuntu 24.04, pastikan port `3000`, `8000`, `8080`, dan `9090` diizinkan pada firewall VPS (`ufw`).
 
-     ```
-     bash run_test.sh
-     
-     ```
+---
 
-   * **Di Linux Ubuntu 24.04:**
+## Parameter Pengujian yang Dapat Dikustomisasi (via React UI)
 
-     ```
-     sudo bash run_test.sh
-     
-     ```
+Setiap kali tombol **Jalankan Benchmark** ditekan di UI, sistem otomatis menjalankan pengujian **Unoptimized (Baseline)** terlebih dahulu lalu dilanjutkan dengan **Optimized (Green Tuning)** menggunakan parameter berikut:
 
-3. **Akses Dashboard Monitoring (Opsional):**
+| Kategori | Parameter | Rentang / Default | Fungsi & Dampak Pengujian |
+| :--- | :--- | :---: | :--- |
+| **Workload** | `Total Requests` | `20 – 1000` (Default: `100`) | Jumlah total permintaan HTTP yang ditembakkan ke `/work`. |
+| **Workload** | `Concurrency` | `1 – 50` (Default: `10`) | Jumlah pengguna simultan (*parallel threads*); makin tinggi, antrean CPU makin padat. |
+| **Workload** | `Prime Limit` | `5.000 – 40.000` (Default: `15.000`) | Batas atas pencarian bilangan prima per *request* untuk mengatur intensitas beban CPU. |
+| **Unoptimized** | `Gunicorn Workers (Baseline)` | `1 – 8` (Default: `4`) | Jumlah proses *worker* pada image Debian penuh tanpa pembatasan CPU & RAM. |
+| **Optimized** | `CPU Limit (Cores)` | `0.1 – 4.0` (Default: `0.5`) | Batas maksimal alokasi CPU core untuk container `green-app` mode *Optimized*. |
+| **Optimized** | `RAM Limit (MB)` | `64 – 2048` (Default: `128`) | Batas maksimal memori container sebelum terkena `OOMKilled`. |
+| **Optimized** | `Workers & Threads (Alpine)` | `2 workers / 2 threads` | Pengaturan proses dan utas paralel pada image `python:3.11-alpine`. |
 
-   * **Aplikasi Uji:** `http://localhost:5000` (atau `http://<IP_VPS>:5000`)
-
-   * **Prometheus UI:** `http://localhost:9090` (atau `http://<IP_VPS>:9090`)
-
-   * **cAdvisor UI:** `http://localhost:8080` (atau `http://<IP_VPS>:8080`)
-
-## Parameter Pengujian & Tuning
-
-Untuk mengeksplorasi berbagai skenario beban kerja dan titik keseimbangan (*right-sizing*), Anda dapat menyesuaikan parameter berikut:
-
-| Kategori Parameter | Parameter | Lokasi File | Default | Efek Jika Diubah |
-| :--- | :--- | :--- | :--- | :--- |
-| **Beban Trafik** | `TOTAL_REQUESTS` | `benchmark/load_test.py` (baris 12) | `100` | Mengatur jumlah total permintaan uji yang dikirimkan. |
-| | `CONCURRENCY` | `benchmark/load_test.py` (baris 13) | `10` | Mengatur jumlah permintaan serentak; makin tinggi nilainya, antrean CPU dan *latency* makin naik. |
-| **Resource Limits** | `cpus` (limits) | `docker-compose.optimized.yml` (baris 12) | `"0.50"` | Mengatur batas maksimal jatah CPU core (misal `"0.25"`, `"0.50"`, `"1.0"`). |
-| | `memory` (limits) | `docker-compose.optimized.yml` (baris 13) | `128M` | Mengatur batas maksimal RAM container. Jika terlalu kecil (misal `32M`), container berisiko mengalami `OOMKilled`. |
-| **Konfigurasi Server** | `-w` (Workers) | `app/Dockerfile.baseline` & `Dockerfile.optimized` | `4` / `2` | Mengatur jumlah proses Gunicorn. Makin banyak *worker*, konsumsi RAM *idle* makin tinggi namun pemrosesan paralel lebih cepat. |
-| | `--threads` | `app/Dockerfile.optimized` | `2` | Mengatur jumlah *thread* per *worker* untuk menangani antrean tanpa memakan banyak RAM tambahan. |
-| **Intensitas Beban** | `range(2, 15000)` | `app/app.py` (baris 18) | `15000` | Mengatur batas pencarian bilangan prima untuk memperberat atau memperingan beban CPU per *request*. |
-| **Resolusi Metrik** | `scrape_interval` | `monitoring/prometheus.yml` (baris 2) | `5s` | Mengatur frekuensi Prometheus menarik metrik dari cAdvisor. |
-| | `time.sleep(0.5)` | `benchmark/load_test.py` (baris 78) | `0.5s` | Mengatur interval pengambilan sampel RAM dan CPU langsung dari Docker socket selama pengujian. |
-
-> **Catatan:** Setelah mengubah parameter di atas, cukup jalankan ulang `bash run_test.sh` (atau `sudo bash run_test.sh` di Ubuntu). Skrip akan otomatis menerapkan perubahan konfigurasi dan membangun ulang *image* jika terdapat perubahan pada folder `app/`.
-
-## Hasil Eksperimen (Baseline vs. Optimized)
-
-Pengujian dilakukan menggunakan beban `100 requests` (`10 concurrent`) pada endpoint komputasi `/work`:
-
-| Metrik Evaluasi | Baseline (`python:3.11`, 4 workers, tanpa limit) | Optimized (`python:3.11-alpine`, 2 workers/2 threads, limit 0.5 CPU / 128MB) | Perubahan / Efisiensi | 
-| ----- | ----- | ----- | ----- | 
-| **Ukuran Docker Image** | `1.62 GB` | `109 MB` | **Hemat 93.27%** | 
-| **RAM Idle** | `75.12 MB` | `44.41 MB` | **Hemat 40.88%** | 
-| **RAM Peak (Saat Beban)** | `78.56 MB` | `46.89 MB` | **Hemat 40.31%** | 
-| **CPU Usage Rate** | `2.4755 cores` | `0.4972 cores` | **Hemat 79.92%** | 
-| **Average Latency** | `0.2468 detik` | `1.3625 detik` | **Naik 452.07%** *(Trade-off)* | 
-| **Tingkat Keberhasilan** | `100 / 100` (100%) | `100 / 100` (100%) | **100% Stabil** | 
+---
 
 ## Analisis Efisiensi & Trade-Off
 
-* **Efisiensi Sumber Daya (*Green Impact*):** Penggunaan *base image* `Alpine` memangkas kapasitas *storage* dan kebutuhan *bandwidth* distribusi *image* hingga **93.27%**. Penyetelan ulang *worker/thread* Gunicorn menurunkan konsumsi RAM hingga **~40.3%**, sementara pembatasan `cpus: "0.50"` menekan konsumsi daya puncak CPU hingga **79.92%** dan mencegah efek *noisy neighbor* pada server.
-
-* **Trade-Off Performa:** Pembatasan kapasitas CPU menjadi `0.50 core` menyebabkan antrean pemrosesan saat terjadi lonjakan trafik paralel, sehingga *average latency* meningkat dari `0.2468s` menjadi `1.3625s`. Meskipun demikian, sistem tetap mampu melayani **100% permintaan tanpa kegagalan** (*zero error / no OOMKilled*).
+* **Efisiensi Sumber Daya (*Green Impact*):** Pergantian *base image* ke `Alpine` memangkas kapasitas *storage* dan konsumsi *bandwidth* distribusi *image* hingga **93.27%**. Penyetelan ulang *worker/thread* Gunicorn menurunkan konsumsi memori hingga **~40.3%**, sementara pembatasan `CPU Limit = 0.50` menekan konsumsi daya puncak prosesor hingga **79.92%** dan mencegah efek *noisy neighbor* pada host server.
+* **Trade-Off Performa:** Pembatasan jatah CPU menjadi `0.50 core` menyebabkan antrean pemrosesan saat terjadi lonjakan trafik paralel, sehingga *average latency* meningkat dari `0.2468s` menjadi `1.3625s`. Meskipun demikian, sistem tetap melayani **100% permintaan tanpa kegagalan** (*zero error / no OOMKilled*).
